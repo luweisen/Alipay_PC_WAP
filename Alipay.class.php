@@ -2,6 +2,8 @@
 namespace Common\Library\Pay\Alipay;
 use Common\Library\Pay\Alipay\lib\AlipaySubmit;
 use Common\Library\Pay\Alipay\lib\AlipayWapSubmit;
+// use Common\Library\Pay\Alipay\lib\AlipayNotify;
+use Common\Library\Pay\Alipay\lib\AlipayNotifyMobile;
 
 class Alipay {
 
@@ -19,13 +21,13 @@ class Alipay {
 
         //卖家支付宝帐户
         $this->seller = $this->config['seller'];
-    }
 
-    public function test()
-    {
-        self::cfg();
+        $this->domain = "http://{$_SERVER['HTTP_HOST']}";
+        $this->wap_return_url = $this->domain . '/alipay/callback';
+        $this->wap_notify_url = $this->domain . '/alipay/notify';
 
-        var_dump(ALI_CACERT);
+        $this->pc_return_url = $this->domain . '/alipay/callback';
+        $this->pc_notify_url = $this->domain . '/alipay/notify';
     }
 
     private static function cfg() {
@@ -51,26 +53,6 @@ class Alipay {
         if (!defined('ALI_PAYMENT_TYPE')) {
             define("ALI_PAYMENT_TYPE", 1);
         }
-
-        //页面跳转同步通知页面路径
-        if (!defined('ALI_RETURN_URL')) {
-            define("ALI_RETURN_URL", "http://demo.demo.com/test/returnurlpc");
-        }
-
-        //服务器异步通知页面路径
-        if (!defined('ALI_NOTIFY_URL')) {
-            define("ALI_NOTIFY_URL", "http://demo.demo.com/test/notifyurlpc");
-        }
-
-        //wap端页面跳转同步通知页面路径
-        if (!defined('ALI_WAP_RETURN_URL')) {
-            define("ALI_WAP_RETURN_URL", "http://demo.demo.com/test/returnurlmobile");
-        }
-
-        //wap端服务器异步通知页面路径
-        if (!defined('ALI_WAP_NOTIFY_URL')) {
-            define("ALI_WAP_NOTIFY_URL", "http:/demo.demo.com/test/notifyurlmobile");
-        }
     }
 
     public function getBaseConfig() {
@@ -88,42 +70,6 @@ class Alipay {
     }
 
     /**
-     * 网页端支付功能
-     * @param type $out_trade_no     商品唯一订单号
-     * @param type $subject          商品名称
-     * @param type $total_fee        商品总价
-     * @param type $body             商品描述说明
-     * @param type $show_url         商品展示地址
-     */
-    public function doSubmit($out_trade_no, $subject, $total_fee, $body = "", $show_url = "") {
-        header('Content-type:text/html;charset=utf-8');
-        self::cfg();
-        //构造要请求的参数数组，无需改动
-        $parameter = array(
-            "service" => "create_direct_pay_by_user",
-            "partner" => trim($this->partner),
-            "payment_type" => ALI_PAYMENT_TYPE,
-            "notify_url" => ALI_NOTIFY_URL,
-            "return_url" => ALI_RETURN_URL,
-            "seller_email" => $this->seller,
-            "out_trade_no" => $out_trade_no, //商户网站订单系统中唯一订单号，必填
-            "subject" => $subject, //订单名称 必填
-            "total_fee" => $total_fee, //付款金额 必填
-            "body" => $body, //订单描述
-            "show_url" => $show_url, //商品展示地址 需以http://开头的完整路径
-            "anti_phishing_key" => '', //防钓鱼时间戳
-            "exter_invoke_ip" => '', //客户端的IP地址
-            "_input_charset" => trim(strtolower(ALI_INPUT_CHARSET))
-        );
-
-
-        //建立请求
-        $alipaySubmit = new AlipaySubmit($this->getBaseConfig());
-        $html_text = $alipaySubmit->buildRequestForm($parameter, "get", "正在跳转为您跳转到支付宝……");
-        echo $html_text;
-    }
-
-    /**
      * wap支付
      * @param type $out_trade_no   商品唯一订单号
      * @param type $subject        商品名称
@@ -137,7 +83,7 @@ class Alipay {
         $v = "2.0";
         $req_id = date('Ymdhis');
         //请求业务参数详细
-        $req_data = '<direct_trade_create_req><notify_url>' . ALI_WAP_NOTIFY_URL . '</notify_url><call_back_url>' . ALI_WAP_RETURN_URL . '</call_back_url><seller_account_name>' . $this->seller . '</seller_account_name><out_trade_no>' . $out_trade_no . '</out_trade_no><subject>' . $subject . '</subject><total_fee>' . $total_fee . '</total_fee><merchant_url>' . $merchant_url . '</merchant_url></direct_trade_create_req>';
+        $req_data = '<direct_trade_create_req><notify_url>' . $this->wap_notify_url . '</notify_url><call_back_url>' . $this->wap_return_url . '</call_back_url><seller_account_name>' . $this->seller . '</seller_account_name><out_trade_no>' . $out_trade_no . '</out_trade_no><subject>' . $subject . '</subject><total_fee>' . $total_fee . '</total_fee><merchant_url>' . $merchant_url . '</merchant_url></direct_trade_create_req>';
 
         //构造要请求的参数数组，无需改动
         $para_token = array(
@@ -183,9 +129,135 @@ class Alipay {
 
         //建立请求
         $alipayWapSubmit = new AlipayWapSubmit($this->getBaseConfig());
-        $html_text = $alipayWapSubmit->buildRequestForm($parameter, 'get', '正在跳转为您跳转到支付宝……');
-        echo $html_text;
+        $html_text = $alipayWapSubmit->buildRequestForm($parameter, 'get', '正在为您跳转到支付宝……');
+        return $html_text;
     }
+
+    public function returnWap()
+    {
+        header('Content-type:text/html;charset=utf-8');
+        $alipayNotify = new AlipayNotifyMobile($this->getBaseConfig());
+        $verify_result = $alipayNotify->verifyReturn();
+
+        if($verify_result) {//验证成功
+            $out_trade_no = $_GET['out_trade_no'];    //商户订单号
+            $trade_no = $_GET['trade_no'];            //支付宝交易号
+            $result = $_GET['result'];                //交易状态
+
+            //内部业务逻辑   
+            return array($out_trade_no, $trade_no, $result);
+        }else{
+            return false;
+        }
+    }
+
+    public function notifyWap()
+    {
+        header('Content-type:text/html;charset=utf-8');
+        $alipayNotify = new AlipayNotifyMobile($this->getBaseConfig());
+        $verify_result = $alipayNotify->verifyNotify();
+
+        if($verify_result) {//验证成功
+            $notify_data = @simplexml_load_string($_POST['notify_data'],NULL,LIBXML_NOCDATA);
+            $notify_data_arrs = json_decode(json_encode($notify_data),true);
+
+            if (!empty($notify_data_arrs['payment_type'])) {
+                $out_trade_no = $notify_data_arrs['out_trade_no']; //商户订单号
+                $trade_no = $notify_data_arrs['trade_no'];         //支付宝交易号
+                $trade_status = $notify_data_arrs['trade_status']; //交易状态
+
+
+                return array($out_trade_no, $trade_no, $trade_status, $notify_data_arrs);
+            }
+        }
+
+        return false;
+    }
+
+/**
+ * PC 业务
+ 
+
+     * /**
+     * 网页端支付功能
+     * @param type $out_trade_no     商品唯一订单号
+     * @param type $subject          商品名称
+     * @param type $total_fee        商品总价
+     * @param type $body             商品描述说明
+     * @param type $show_url         商品展示地址
+     * 
+    public function doSubmit($out_trade_no, $subject, $total_fee, $body = "", $show_url = "") {
+        header('Content-type:text/html;charset=utf-8');
+        self::cfg();
+        //构造要请求的参数数组，无需改动
+        $parameter = array(
+            "service" => "create_direct_pay_by_user",
+            "partner" => trim($this->partner),
+            "payment_type" => ALI_PAYMENT_TYPE,
+            "notify_url" => $this->pc_notify_url,
+            "return_url" => $this->pc_return_url,
+            "seller_email" => $this->seller,
+            "out_trade_no" => $out_trade_no, //商户网站订单系统中唯一订单号，必填
+            "subject" => $subject, //订单名称 必填
+            "total_fee" => $total_fee, //付款金额 必填
+            "body" => $body, //订单描述
+            "show_url" => $show_url, //商品展示地址 需以http://开头的完整路径
+            "anti_phishing_key" => '', //防钓鱼时间戳
+            "exter_invoke_ip" => '', //客户端的IP地址
+            "_input_charset" => trim(strtolower(ALI_INPUT_CHARSET))
+        );
+
+
+        //建立请求
+        $alipaySubmit = new AlipaySubmit($this->getBaseConfig());
+        $html_text = $alipaySubmit->buildRequestForm($parameter, "get", "正在跳转为您跳转到支付宝……");
+        return $html_text;
+    }
+
+    public function returnPC()
+    {
+        $alipayNotify = new AlipayNotify($this->getBaseConfig());
+        $verify_result = $alipayNotify->verifyReturn();
+        if ($verify_result) {                          //验证成功
+            $out_trade_no = $_GET['out_trade_no'];     //商户订单号
+            $trade_no = $_GET['trade_no'];             //支付宝交易号
+            $trade_status = $_GET['trade_status'];     //交易状态
+
+            if($_GET['trade_status'] == 'TRADE_FINISHED' || $_GET['trade_status'] == 'TRADE_SUCCESS') {
+                //TO DO 处理自己的内部业务逻辑
+            }
+            else {
+              echo "trade_status=".$_GET['trade_status'];
+            }
+
+            echo "验证成功<br />";
+        } else {
+            echo "验证失败";
+        }
+    }
+
+    public function notifyPC()
+    {
+        $alipayNotify = new AlipayNotify(Alipay::getBaseConfig());
+        $verify_result = $alipayNotify->verifyNotify();
+
+
+        if($verify_result) {//验证成功
+            $out_trade_no = $_POST['out_trade_no'];    //商户订单号
+            $trade_no = $_POST['trade_no'];            //支付宝交易号
+            $trade_status = $_POST['trade_status'];    //交易状态
+            if($_POST['trade_status'] == 'TRADE_FINISHED') {
+                //TO DO 处理自己的内部业务逻辑
+            }else if ($_POST['trade_status'] == 'TRADE_SUCCESS') {
+                //TO DO 处理自己的内部业务逻辑
+            }
+            echo "success";
+        }else{
+            echo "fail";
+        }
+    }
+
+ */
 
 }
 
