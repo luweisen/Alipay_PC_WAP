@@ -22,12 +22,12 @@ class Alipay {
         //卖家支付宝帐户
         $this->seller = $this->config['seller'];
 
-        $this->domain = "http://{$_SERVER['HTTP_HOST']}";
-        $this->wap_return_url = $this->domain . '/alipay/callback';
-        $this->wap_notify_url = $this->domain . '/alipay/notify';
+        $domain = "http://{$_SERVER['HTTP_HOST']}";
+        $this->wap_return_url = $domain . '/alipay/callback';
+        $this->wap_notify_url = $domain . '/alipay/notify';
 
-        $this->pc_return_url = $this->domain . '/alipay/callback';
-        $this->pc_notify_url = $this->domain . '/alipay/notify';
+        // $this->pc_return_url = $domain . '/alipay/callback';
+        // $this->pc_notify_url = $domain . '/alipay/notify';
     }
 
     private static function cfg() {
