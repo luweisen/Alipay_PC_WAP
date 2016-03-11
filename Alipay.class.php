@@ -171,7 +171,7 @@ class Alipay {
             }
         }
 
-        return false;
+        return array();
     }
 
 /**
